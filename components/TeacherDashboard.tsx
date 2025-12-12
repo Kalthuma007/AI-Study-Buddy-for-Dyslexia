@@ -111,9 +111,36 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to remove this material?")) {
-      setMaterials(prev => prev.filter(m => m.id !== id));
+  const handleDelete = async (id: string) => {
+    // 1. Confirmation
+    if (!confirm("Are you sure you want to permanently delete this material?")) {
+      return;
+    }
+
+    try {
+      // 2. API Call
+      const response = await fetch(`/api/files/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // 3. Error Handling
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); 
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      }
+
+      // 4. Update UI State
+      setMaterials(prev => prev.filter(item => item.id !== id));
+      
+      // 5. Success Feedback
+      alert("File deleted successfully");
+      
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert("Failed to delete file. Please ensure the server is running and try again.");
     }
   };
 
