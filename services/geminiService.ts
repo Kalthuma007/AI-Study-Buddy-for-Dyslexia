@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { SimplificationResult, SimplificationLevel, SupportedLanguage, TeacherMaterial } from "../types";
+import { SimplificationResult, SimplificationLevel, SupportedLanguage, TeacherMaterial, Subject } from "../types";
 
 const apiKey = process.env.API_KEY;
 
@@ -62,6 +63,7 @@ export const simplifyText = async (
             4. Group related ideas together.
             5. Provide a 1-sentence summary at the start (for the summary field).
             6. Highlight only the most important concept in each bullet point using {{term}}. Avoid highlighting common or repeated words.
+            7. EXTRACT FULL CONTENT. Do not summarize unless asked. Simplify the phrasing but keep the information.
             `;
         } else {
             // Intermediate English instructions
@@ -73,6 +75,7 @@ export const simplifyText = async (
             4. Group related ideas together.
             5. Provide a 1-sentence summary at the start.
             6. Highlight only the most important concept in each bullet point using {{term}}. Avoid highlighting common or repeated words.
+            7. EXTRACT FULL CONTENT. Do not summarize unless asked. Simplify the phrasing but keep the information.
             `;
         }
         break;
@@ -85,6 +88,7 @@ export const simplifyText = async (
         3. Maintain original paragraph structure but simplify complex phrasing.
         4. Provide a 1-sentence summary at the start.
         5. Highlight only the most important concept in each sentence using {{term}}. Avoid highlighting common or repeated words.
+        6. EXTRACT FULL CONTENT. Do not truncate the text. Rewrite the entire document in simpler terms.
         `;
         break;
     }
@@ -195,7 +199,8 @@ export const generateSpeech = async (text: string, voice: string = 'Puck'): Prom
 export const processTeacherDocument = async (
   base64Data: string,
   mimeType: string,
-  fileName: string
+  fileName: string,
+  subject: Subject = 'General'
 ): Promise<TeacherMaterial> => {
   try {
     const prompt = `
@@ -204,13 +209,16 @@ export const processTeacherDocument = async (
       
       Task: Create 3 distinct simplified versions of the content for different reading needs.
       
+      CRITICAL INSTRUCTION: EXTRACT THE FULL CONTENT. Do not summarize the document unless explicitly asked in Level 3.
+      For Level 1 and Level 2, you must process the ENTIRE document content. Do not truncate the text. If the document is long, you must still provide the full simplified version.
+      
       STRICT OUTPUT RULES:
       1. Return PLAIN TEXT only. 
       2. Do NOT use HTML tags. 
       3. For Level 2, use numbers (1., 2., 3.) or letters (a., b., c.) for lists.
 
-      1. Level 1 (Standard): Simple vocabulary, active voice, keep paragraph structure.
-      2. Level 2 (Structured): Convert content into clear, grouped bullet points.
+      1. Level 1 (Standard): Simple vocabulary, active voice, keep paragraph structure. Rewrite the FULL document.
+      2. Level 2 (Structured): Convert the FULL content into clear, grouped bullet points. Do not leave out sections.
       3. Level 3 (Ultra-Short): A single sentence summary of the entire document.
 
       For ALL levels, highlight only the most important concept in each sentence (or bullet point) using {{term}}. Avoid highlighting common or repeated words.
@@ -262,6 +270,7 @@ export const processTeacherDocument = async (
       id: crypto.randomUUID(),
       title: fileName,
       originalFileName: fileName,
+      subject: subject,
       timestamp: Date.now(),
       versions: {
         LEVEL_1: { level: SimplificationLevel.LEVEL_1, content: result.level1.content, summary: result.level1.summary },

@@ -31,6 +31,8 @@ export type VoiceName = 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
 
 export type SupportedLanguage = 'English' | 'Somali' | 'Arabic' | 'Spanish' | 'Chinese';
 
+export type Subject = 'General' | 'Science' | 'History' | 'Literature' | 'Geography' | 'Math';
+
 export interface UserSettings {
   fontSize: number; // in pixels (base)
   lineHeight: number;
@@ -52,7 +54,7 @@ export interface SimplificationResult {
   quiz: QuizQuestion[];
 }
 
-export interface TeacherMaterialVersion {
+export interface TeacherVersion {
   level: SimplificationLevel;
   content: string;
   summary: string;
@@ -61,19 +63,20 @@ export interface TeacherMaterialVersion {
 export interface TeacherMaterial {
   id: string;
   title: string;
-  timestamp: number;
   originalFileName: string;
+  subject: Subject;
+  timestamp: number;
   versions: {
-    [SimplificationLevel.LEVEL_1]: TeacherMaterialVersion;
-    [SimplificationLevel.LEVEL_2]: TeacherMaterialVersion;
-    [SimplificationLevel.LEVEL_3]: TeacherMaterialVersion;
+    [key in SimplificationLevel]: TeacherVersion;
   };
 }
 
 export interface WordToken {
   id: string;
-  text: string;     // Display text (includes punctuation if attached)
-  isTerm: boolean;  // True if it was inside {{ }}
+  text: string;
+  isTerm: boolean;
   startTime: number;
   endTime: number;
+  charStart: number;
+  charEnd: number;
 }
