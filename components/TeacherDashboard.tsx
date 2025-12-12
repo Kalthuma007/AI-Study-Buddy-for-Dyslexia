@@ -112,13 +112,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
   };
 
   const handleDelete = async (id: string) => {
-    // 1. Confirmation
     if (!confirm("Are you sure you want to permanently delete this material?")) {
       return;
     }
 
     try {
-      // 2. API Call
       const response = await fetch(`/api/files/${id}`, {
         method: 'DELETE',
         headers: {
@@ -126,16 +124,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
         }
       });
 
-      // 3. Error Handling
-      if (!response.ok) {
+      // We treat 404 as success (idempotent deletion) because the file might
+      // be a local-only entry or already deleted on the server.
+      if (!response.ok && response.status !== 404) {
         const errorData = await response.json().catch(() => ({})); 
         throw new Error(errorData.message || `Server error: ${response.status}`);
       }
 
-      // 4. Update UI State
+      // Update UI state immediately
       setMaterials(prev => prev.filter(item => item.id !== id));
-      
-      // 5. Success Feedback
       alert("File deleted successfully");
       
     } catch (error) {

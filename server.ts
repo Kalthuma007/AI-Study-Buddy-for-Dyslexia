@@ -25,16 +25,15 @@ app.delete('/api/files/:id', (req: Request, res: Response) => {
   // 1. Find file metadata in database
   const fileIndex = filesDB.findIndex(f => f.id === fileId);
   
-  // Note: Standard REST practice might be to return 404 if not found,
-  // but if the goal is "ensure it's gone", 200 is sometimes used. 
-  // We will stick to strict existence checking.
+  // Return 404 if not found in database. 
+  // The frontend interprets 404 as "already deleted" or "not present" and proceeds.
   if (fileIndex === -1) {
      return res.status(404).json({ error: "File not found" });
   }
 
   const fileRecord = filesDB[fileIndex];
   // Ensure the uploads directory exists relative to this script
-  const filePath = path.join(process.cwd(), fileRecord.path);
+  const filePath = path.resolve(fileRecord.path);
 
   // 2. Remove file from filesystem
   fs.unlink(filePath, (err) => {
