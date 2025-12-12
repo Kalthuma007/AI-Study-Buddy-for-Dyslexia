@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { BookOpen, Mic, Play, Pause, RefreshCw, ChevronLeft, Volume2, Sparkles, AlertCircle, Layers, List, AlignLeft, Zap, Settings2, Maximize2, Minimize2, Languages, GraduationCap, Download } from 'lucide-react';
+import { BookOpen, Brain, Mic, Play, Pause, RefreshCw, ChevronLeft, Volume2, Sparkles, AlertCircle, Layers, List, AlignLeft, Zap, Settings2, Maximize2, Minimize2, Languages, GraduationCap, Download, ArrowRight, X } from 'lucide-react';
 import { simplifyText, generateSpeech } from './services/geminiService';
 import { decodeAudioData, audioBufferToWav } from './utils/audioUtils';
 import { generateWordTokens } from './utils/textUtils';
@@ -18,10 +18,10 @@ const VOICES: { name: VoiceName; label: string }[] = [
 ];
 
 const SPEEDS = [
-  { value: 0.75, label: '0.75x (Slow)' },
-  { value: 1.0, label: '1.0x (Normal)' },
-  { value: 1.25, label: '1.25x (Fast)' },
-  { value: 1.5, label: '1.5x (Faster)' },
+  { value: 0.75, label: '0.75x' },
+  { value: 1.0, label: '1.0x' },
+  { value: 1.25, label: '1.25x' },
+  { value: 1.5, label: '1.5x' },
 ];
 
 const LANGUAGES: SupportedLanguage[] = ['English', 'Somali', 'Arabic', 'Spanish', 'Chinese'];
@@ -56,31 +56,30 @@ export default function App() {
   const [wordTokens, setWordTokens] = useState<WordToken[]>([]);
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const playbackStartTimeRef = useRef<number>(0);
-  const playbackSpeedRef = useRef<number>(1.0); // Track speed for animation loop
+  const playbackSpeedRef = useRef<number>(1.0);
   const animationFrameRef = useRef<number | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
 
   // Settings state
   const [settings, setSettings] = useState<UserSettings>({
     fontSize: 18,
     lineHeight: 1.6,
     letterSpacing: 0.01,
-    theme: Theme.CREAM,
-    fontFamily: FontFamily.LEXEND // Default to Lexend for better accessibility
+    theme: Theme.LIGHT,
+    fontFamily: FontFamily.LEXEND 
   });
 
   // --- Effects ---
   
-  // Check for share link on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareData = params.get('share');
     if (shareData) {
       const loadShared = async () => {
-        setStatus(AppStatus.SIMPLIFYING); // Show loading state
+        setStatus(AppStatus.SIMPLIFYING);
         const material = await decodeAndDecompress(shareData);
         if (material) {
           setSharedMaterial(material);
-          // Set initial view to Level 1
           setResult({
             original: `(Shared File: ${material.title})`,
             simplified: material.versions[SimplificationLevel.LEVEL_1].content,
@@ -98,28 +97,23 @@ export default function App() {
     }
   }, []);
 
-  // Update playback speed dynamically
   useEffect(() => {
-    playbackSpeedRef.current = speed; // Update ref for the loop
+    playbackSpeedRef.current = speed;
     if (audioSourceRef.current && isPlaying) {
-      // AudioParam.value set immediately
       audioSourceRef.current.playbackRate.value = speed;
     }
   }, [speed, isPlaying]);
 
-  // Handle switching levels when in "Shared" mode
   useEffect(() => {
     if (sharedMaterial && status === AppStatus.READING) {
-      // If we have shared material, we switch content from memory, not API
       const version = sharedMaterial.versions[level];
       if (version) {
         setResult({
           original: `(Shared File: ${sharedMaterial.title})`,
           simplified: version.content,
           summary: version.summary,
-          quiz: [] // Quizzes are not currently part of the shared object
+          quiz: []
         });
-        // Reset audio when switching levels locally
         stopAudio();
         setAudioBuffer(null);
         setWordTokens([]);
@@ -127,7 +121,13 @@ export default function App() {
     }
   }, [level, sharedMaterial]);
 
-  // Handle ESC to exit focus mode
+  // Scroll to result on mobile when reading starts
+  useEffect(() => {
+    if (status === AppStatus.READING && resultRef.current && window.innerWidth < 1024) {
+      resultRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [status]);
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsFocusMode(false);
@@ -136,7 +136,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  // Cleanup animation frame
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -148,39 +147,25 @@ export default function App() {
   const handleSimplify = async () => {
     if (!inputText.trim()) return;
     
-    // If we are currently viewing shared material, clearing the input or clicking simplify 
-    // should probably exit shared mode if the text changed, but for now let's assume 
-    // explicit "New Text" clears it.
-    
     setStatus(AppStatus.SIMPLIFYING);
     setErrorMsg(null);
     setAudioBuffer(null);
-    setWordTokens([]); // Reset tokens
+    setWordTokens([]);
     setActiveTokenId(null);
 
-    // If text was manually changed, we are no longer in "shared" mode for that text
     if (sharedMaterial && !inputText.includes(sharedMaterial.title)) {
         setSharedMaterial(null);
     }
 
-    // However, if we are just switching levels on shared material, the Effect handles it.
-    // This function is called by the "Simplify" button.
-    // If shared material is active, we don't want to re-call API unless user explicitly pasted new text.
-    if (sharedMaterial) {
-       // If user clicks button while on shared material, maybe they want to re-generate/translate?
-       // But Shared Material doesn't have original text (it was a file). 
-       // So we can't re-generate. We should probably disable the button or warn.
-       // For now, let's just let it fall through to API if they changed text, or do nothing.
-       if (inputText.startsWith("Loaded content from")) {
-           return; // Do nothing if it's just the placeholder
-       }
+    if (sharedMaterial && inputText.startsWith("Loaded content from")) {
+        return;
     }
 
     try {
       const data = await simplifyText(inputText, level, targetLanguage);
       setResult(data);
       setStatus(AppStatus.READING);
-      setSharedMaterial(null); // Clear shared state if we generated new fresh text
+      setSharedMaterial(null);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
       setStatus(AppStatus.ERROR);
@@ -189,7 +174,6 @@ export default function App() {
 
   const handleVoiceChange = (newVoice: VoiceName) => {
     setVoice(newVoice);
-    // Invalidate buffer because the voice changed
     setAudioBuffer(null);
     setWordTokens([]);
     if (isPlaying) {
@@ -213,7 +197,6 @@ export default function App() {
       const buffer = await decodeAudioData(base64Audio, audioContextRef.current);
       setAudioBuffer(buffer);
       
-      // Generate word tokens for sync
       const tokens = generateWordTokens(result.simplified, buffer.duration);
       setWordTokens(tokens);
 
@@ -225,34 +208,27 @@ export default function App() {
     }
   };
 
-  // Animation Loop for Sync
   const startSyncLoop = () => {
     if (!audioContextRef.current) return;
 
-    // We track position relative to when we started playback
-    // Since we always start from 0 in this implementation:
     const startCtxTime = playbackStartTimeRef.current;
     let lastTime = performance.now();
-    let audioProgress = 0; // In seconds
+    let audioProgress = 0;
 
     const loop = () => {
-      if (!isPlaying && audioProgress > 0) return; // Stop if paused (state check might be stale in closure, rely on ref/cancel)
+      if (!isPlaying && audioProgress > 0) return;
       
       const now = performance.now();
       const dt = (now - lastTime) / 1000;
       lastTime = now;
       
-      // Advance progress based on current speed
       audioProgress += dt * playbackSpeedRef.current;
 
-      // Find active token
-      // This linear search is fine for small text, but could be optimized if needed.
       const active = wordTokens.find(t => audioProgress >= t.startTime && audioProgress < t.endTime);
       
       if (active) {
         setActiveTokenId(active.id);
       } else if (audioProgress > wordTokens[wordTokens.length - 1]?.endTime + 0.5) {
-        // Just clear if past the end
         setActiveTokenId(null);
       }
 
@@ -266,11 +242,8 @@ export default function App() {
   const playAudio = useCallback((buffer: AudioBuffer) => {
     if (!audioContextRef.current) return;
     
-    // Stop any existing source
     if (audioSourceRef.current) {
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) { /* ignore */ }
+      try { audioSourceRef.current.stop(); } catch (e) { }
     }
 
     const source = audioContextRef.current.createBufferSource();
@@ -290,15 +263,12 @@ export default function App() {
     setIsPlaying(true);
     setStatus(AppStatus.PLAYING_AUDIO);
     
-    // Start Sync Loop
     startSyncLoop();
-  }, [speed, wordTokens]); // Re-create if wordTokens changes (which happens on generation)
+  }, [speed, wordTokens]);
 
   const stopAudio = () => {
     if (audioSourceRef.current) {
-      try {
-        audioSourceRef.current.stop();
-      } catch (e) { /* ignore */ }
+      try { audioSourceRef.current.stop(); } catch (e) { }
       setIsPlaying(false);
       setStatus(AppStatus.READING);
       setActiveTokenId(null);
@@ -340,7 +310,6 @@ export default function App() {
     setWordTokens([]);
     setSharedMaterial(null);
     setIsFocusMode(false);
-    // Remove query param
     const url = new URL(window.location.href);
     url.search = '';
     window.history.replaceState({}, document.title, url.toString());
@@ -350,131 +319,104 @@ export default function App() {
 
   const getContainerStyles = () => {
     switch (settings.theme) {
-      case Theme.DARK:
-        return 'bg-slate-900 text-slate-100';
-      case Theme.CREAM:
-        return 'bg-[#FDFBF7] text-slate-800'; // Sepia
-      case Theme.SOFT_BLUE:
-        return 'bg-[#EDF2F7] text-slate-900'; // Pastel Blue
-      case Theme.LIGHT:
-      default:
-        return 'bg-white text-gray-900';
+      case Theme.DARK: return 'bg-gray-900 text-gray-50'; // Dark Gray (#111827) and Soft White (#F9FAFB)
+      case Theme.CREAM: return 'bg-[#FDFBF7] text-slate-800'; 
+      case Theme.SOFT_BLUE: return 'bg-[#EDF2F7] text-slate-900'; 
+      case Theme.LIGHT: default: return 'bg-white text-gray-900';
     }
   };
 
-  const getContentStyles = () => {
-    return {
-      fontSize: `${settings.fontSize}px`,
-      lineHeight: settings.lineHeight,
-      letterSpacing: `${settings.letterSpacing}em`,
-    };
-  };
+  const getContentStyles = () => ({
+    fontSize: `${settings.fontSize}px`,
+    lineHeight: settings.lineHeight,
+    letterSpacing: `${settings.letterSpacing}em`,
+  });
 
   const getFontClass = () => settings.fontFamily;
 
   // --- Render Helpers ---
 
-  // Replaces the old string-splitting render with Token-based render
   const renderTextContent = () => {
     if (!result?.simplified) return null;
 
-    // If we have tokens (audio generated), use them for sync highlighting
     if (wordTokens.length > 0) {
        return wordTokens.map((token) => {
           let className = "mx-[1px] rounded px-[1px] transition-colors duration-150 ";
           
-          // Term Highlight (Static)
           if (token.isTerm) {
             if (settings.theme === Theme.DARK) {
-              className += 'text-blue-200 border-b-2 border-blue-500 ';
-              if (!isActive) className += 'bg-blue-900/40 ';
-            } else if (settings.theme === Theme.CREAM) {
-              className += 'text-amber-900 border-b-2 border-amber-300 ';
-              if (!isActive) className += 'bg-amber-100/50 ';
+                 // Dark Mode Highlight: Light Blue (#A5B4FC / indigo-300)
+                 className += 'text-indigo-300 font-bold border-b-2 border-indigo-300/30 ';
+                 if (!isActive) className += 'bg-indigo-300/10 ';
             } else {
-              className += 'text-blue-900 border-b-2 border-blue-300 ';
-              if (!isActive) className += 'bg-blue-100/50 ';
+                 className += 'text-accent font-bold border-b-2 border-accent/30 ';
+                 if (!isActive) className += 'bg-accent/5 ';
             }
           }
 
-          // Active Word Highlight (Playback)
           var isActive = token.id === activeTokenId;
           if (isActive) {
-             if (settings.theme === Theme.DARK) {
-               className += 'bg-yellow-600/60 text-white ';
-             } else {
-               className += 'bg-yellow-300/60 text-slate-900 ';
-             }
+             className += 'bg-yellow-300 text-black ';
           }
           
-          return (
-            <span key={token.id} className={className}>
-              {token.text}
-            </span>
-          );
+          return <span key={token.id} className={className}>{token.text}</span>;
        });
     }
 
-    // Fallback: Default static render if no audio/tokens yet
     const parts = result.simplified.split(/(\{\{.*?\}\})/g);
     return parts.map((part, index) => {
       if (part.startsWith('{{') && part.endsWith('}}')) {
         const content = part.slice(2, -2);
-        let highlightClass = 'bg-blue-100/80 text-blue-900 border-b-2 border-blue-300';
-        if (settings.theme === Theme.DARK) highlightClass = 'bg-blue-900/60 text-blue-200 border-b-2 border-blue-500';
-        else if (settings.theme === Theme.CREAM) highlightClass = 'bg-amber-100 text-amber-900 border-b-2 border-amber-300';
-        else if (settings.theme === Theme.SOFT_BLUE) highlightClass = 'bg-white text-blue-900 border-b-2 border-blue-200 shadow-sm';
-        return <span key={index} className={`px-1 rounded-t-sm mx-0.5 font-semibold decoration-clone ${highlightClass}`}>{content}</span>;
+        if (settings.theme === Theme.DARK) {
+             return <span key={index} className="px-1 rounded-sm mx-0.5 font-bold text-indigo-300 bg-indigo-300/10 border-b-2 border-indigo-300/30">{content}</span>;
+        }
+        return <span key={index} className="px-1 rounded-sm mx-0.5 font-bold text-accent bg-accent/5 border-b-2 border-accent/30">{content}</span>;
       }
       return <span key={index}>{part}</span>;
     });
   };
 
-  // --- Level Selection Component ---
   const LevelButton = ({ lvl, label, desc, icon: Icon }: { lvl: SimplificationLevel, label: string, desc: string, icon: React.ElementType }) => (
     <button
       onClick={() => setLevel(lvl)}
       className={`
-        flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all w-full md:w-1/3
+        flex flex-col items-center justify-center p-3 rounded-xl border transition-all w-full
         ${level === lvl 
-          ? 'border-blue-500 bg-blue-50 text-blue-700' 
-          : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200 hover:bg-slate-50'
+          ? 'border-primary bg-blue-50 text-primary shadow-sm ring-1 ring-blue-100' 
+          : 'border-slate-200 bg-white text-slate-400 hover:border-primary hover:text-primary hover:bg-slate-50'
         }
       `}
     >
-      <div className={`mb-2 p-2 rounded-full ${level === lvl ? 'bg-blue-100' : 'bg-slate-100'}`}>
-        <Icon className={`w-5 h-5 ${level === lvl ? 'text-blue-600' : 'text-slate-400'}`} />
-      </div>
-      <span className="font-bold text-sm mb-0.5">{label}</span>
-      <span className="text-xs opacity-80">{desc}</span>
+      <Icon className={`w-5 h-5 mb-1 ${level === lvl ? 'text-primary' : 'text-slate-400'}`} />
+      <span className="font-bold text-sm">{label}</span>
+      <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">{desc}</span>
     </button>
   );
 
-  // --- Teacher Mode Render ---
+  const isDark = settings.theme === Theme.DARK;
+
   if (viewMode === 'teacher') {
     return <TeacherDashboard onBack={() => setViewMode('student')} />;
   }
 
-  // --- Focus Mode Render ---
+  // Focus Mode
   if (isFocusMode && result) {
     return (
         <div className={`min-h-screen transition-colors duration-300 ${getContainerStyles()} ${getFontClass()} fixed inset-0 z-[100] overflow-y-auto`}>
-            <div className="max-w-3xl mx-auto p-8 pt-24 pb-20 min-h-screen">
-                 {/* Floating Controls */}
+            <div className="max-w-4xl mx-auto p-8 pt-24 pb-20 min-h-screen">
                  <div className="fixed top-6 right-6 flex items-center gap-3 z-50 print:hidden">
-                    <button onClick={toggleAudio} className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 transition-transform hover:scale-105" title={isPlaying ? "Pause" : "Read Aloud"}>
+                    <button onClick={toggleAudio} className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-white shadow-xl hover:bg-blue-600 transition-transform hover:scale-105" title={isPlaying ? "Pause" : "Read Aloud"}>
                         {status === AppStatus.GENERATING_AUDIO ? <RefreshCw className="w-5 h-5 animate-spin" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 ml-1" />}
                     </button>
-                    <button onClick={() => setIsFocusMode(false)} className={`flex items-center justify-center w-12 h-12 rounded-full shadow-xl transition-transform hover:scale-105 border ${settings.theme === Theme.DARK ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'}`} title="Exit Focus Mode (ESC)">
+                    <button onClick={() => setIsFocusMode(false)} className="flex items-center justify-center w-12 h-12 rounded-full shadow-xl transition-transform hover:scale-105 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50" title="Exit Focus Mode (ESC)">
                         <Minimize2 className="w-5 h-5" />
                     </button>
                  </div>
                  
-                 {/* Content */}
                  {result?.summary && level !== SimplificationLevel.LEVEL_3 && (
-                   <div className={`mb-12 p-8 rounded-3xl border ${settings.theme === Theme.DARK ? 'bg-slate-800 border-slate-700' : 'bg-blue-50/50 border-blue-100/50'}`}>
-                      <h3 className="opacity-60 uppercase text-sm font-bold tracking-widest mb-4">Summary</h3>
-                      <p className="text-xl leading-relaxed font-sans font-medium opacity-90">
+                   <div className={`mb-12 p-8 rounded-3xl border ${isDark ? 'bg-indigo-900/20 border-indigo-500/20' : 'bg-accent/5 border-accent/20'}`}>
+                      <h3 className={`uppercase text-sm font-bold tracking-widest mb-4 ${isDark ? 'text-indigo-300' : 'text-accent'}`}>Summary</h3>
+                      <p className={`text-xl leading-relaxed font-sans font-medium ${isDark ? 'text-gray-50' : 'text-slate-800'}`}>
                         {result.summary}
                       </p>
                    </div>
@@ -488,178 +430,177 @@ export default function App() {
     );
   }
 
-  // --- Standard Render ---
-
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${getContainerStyles()} ${getFontClass()}`}>
+    <div className={`min-h-screen flex flex-col font-sans bg-background text-text-main`}>
       
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-opacity-90 border-b border-gray-200/50 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200">
-            <BookOpen className="w-6 h-6" />
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 h-20 flex-none transition-all">
+        <div className="max-w-screen-2xl mx-auto px-6 h-full flex items-center justify-between">
+          
+          {/* Left: Branding */}
+          <div className="flex items-center gap-3">
+             <div className="relative flex items-center justify-center w-10 h-10 bg-blue-50 rounded-xl">
+                <BookOpen className="w-6 h-6 text-primary absolute" strokeWidth={2.5} />
+                <Brain className="w-4 h-4 text-accent absolute -top-1 -right-1 fill-white" strokeWidth={2.5} />
+             </div>
+             <div className="flex flex-col">
+                 <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-none">Lexi</h1>
+                 <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">AI Study Buddy</span>
+             </div>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Lexi</h1>
-        </div>
-        <div className="flex items-center gap-3">
-           {status !== AppStatus.IDLE && (
-            <button onClick={resetApp} className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors mr-2">
-              <RefreshCw className="w-4 h-4" /> New Text
-            </button>
-           )}
-           <button onClick={() => setViewMode('teacher')} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-blue-100 hover:text-blue-700 transition-colors border border-slate-200">
-              <GraduationCap className="w-4 h-4" /> Teacher Dashboard
-           </button>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3">
+             {status !== AppStatus.IDLE && (
+                <button onClick={resetApp} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="Reset">
+                   <RefreshCw className="w-5 h-5" />
+                </button>
+             )}
+             <button 
+                onClick={() => setViewMode('teacher')} 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 text-accent font-bold text-sm border border-purple-100 hover:bg-accent hover:text-white transition-all shadow-sm group"
+             >
+                <GraduationCap className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                <span className="hidden sm:inline">Teacher Dashboard</span>
+             </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 md:p-10">
+      {/* Main Content */}
+      <main className="flex-1 max-w-screen-2xl mx-auto w-full p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row gap-6 lg:gap-8 overflow-hidden">
         
-        {/* VIEW: INPUT */}
-        {status === AppStatus.IDLE || status === AppStatus.SIMPLIFYING || status === AppStatus.ERROR ? (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center space-y-4 max-w-2xl mx-auto mt-6 mb-8">
-              <h2 className="text-4xl font-extrabold tracking-tight mb-2">Reading made simple.</h2>
-              <p className="text-xl opacity-70">
-                Paste complex text below. Lexi will simplify it and read it out loud for you.
-              </p>
-            </div>
+        {/* Input Panel */}
+        <div className={`flex flex-col bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden min-h-[500px] transition-all duration-500 ease-in-out ${status === AppStatus.IDLE ? 'w-full max-w-3xl mx-auto' : 'flex-1'}`}>
+          
+          {/* Panel Header */}
+          <div className="px-6 py-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+             <div className="flex items-center gap-2">
+               <Layers className="w-4 h-4 text-primary" />
+               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Input Text</span>
+             </div>
+             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{inputText.length} chars</span>
+          </div>
 
-            <div className="bg-white/50 p-2 rounded-2xl shadow-xl border border-slate-200/60 backdrop-blur-sm">
-              <textarea
+          <div className="flex-1 p-6 relative">
+             <textarea
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Paste your text here..."
-                className={`w-full h-56 p-6 rounded-xl bg-transparent border-0 focus:ring-0 resize-none text-lg placeholder:text-slate-400 ${getFontClass()}`}
+                placeholder="Paste your study text here..."
+                className={`w-full h-full resize-none border-0 focus:ring-0 text-lg sm:text-xl text-slate-800 placeholder:text-slate-300 bg-transparent leading-relaxed ${getFontClass()}`}
                 disabled={status === AppStatus.SIMPLIFYING}
               />
-              <div className="px-4 pb-2 pt-2 border-t border-slate-100 bg-white/40 rounded-b-xl">
-                 <div className="flex justify-between items-center mb-4">
-                     <span className="text-sm text-slate-400 font-medium">{inputText.length} characters</span>
-                 </div>
-                 
-                 {/* Controls Row */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="space-y-3">
-                        <label className="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                           <Settings2 className="w-3 h-3" /> Complexity Level
-                        </label>
-                        <div className="flex gap-2">
-                          <LevelButton lvl={SimplificationLevel.LEVEL_1} label="L1" desc="Standard" icon={AlignLeft} />
-                          <LevelButton lvl={SimplificationLevel.LEVEL_2} label="L2" desc="Bullets" icon={List} />
-                          <LevelButton lvl={SimplificationLevel.LEVEL_3} label="L3" desc="Short" icon={Zap} />
-                        </div>
-                    </div>
-
-                     <div className="space-y-3">
-                        <label className="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                           <Languages className="w-3 h-3" /> Output Language
-                        </label>
-                        <div className="relative">
-                           <select 
-                              value={targetLanguage} 
-                              onChange={(e) => setTargetLanguage(e.target.value as SupportedLanguage)} 
-                              className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 py-3 pl-4 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium transition-shadow hover:bg-white"
-                              disabled={!!sharedMaterial} // Disable translation for shared material as it is pre-generated
-                            >
-                              {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
-                           </select>
-                           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div>
-                        </div>
-                     </div>
-                 </div>
-
-                 <button 
-                    onClick={handleSimplify} 
-                    disabled={(!inputText.trim() && !sharedMaterial) || status === AppStatus.SIMPLIFYING || (!!sharedMaterial && inputText.startsWith("Loaded content"))} 
-                    className={`w-full flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold text-white transition-all transform active:scale-[0.99] shadow-lg ${!inputText.trim() || status === AppStatus.SIMPLIFYING ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-300 hover:shadow-blue-400'}`}
-                  >
-                    {status === AppStatus.SIMPLIFYING ? <><RefreshCw className="w-5 h-5 animate-spin" /> Simplifying...</> : <><Sparkles className="w-5 h-5" /> Simplify & Translate</>}
-                  </button>
-              </div>
-            </div>
-
-            {errorMsg && <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 border border-red-100 animate-pulse"><AlertCircle className="w-5 h-5" />{errorMsg}</div>}
           </div>
-        ) : (
-          /* VIEW: RESULT */
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <TextControls settings={settings} onUpdate={(newSettings) => setSettings(prev => ({ ...prev, ...newSettings }))} />
-            <div className={`rounded-3xl shadow-xl overflow-hidden border ${settings.theme === Theme.DARK ? 'border-slate-800 bg-slate-800' : 'border-slate-100 bg-white'}`}>
-              
-              {/* Toolbar */}
-              <div className={`px-4 md:px-6 py-4 border-b flex flex-col md:flex-row gap-4 items-center justify-between ${settings.theme === Theme.DARK ? 'border-slate-700 bg-slate-900/50' : 'border-slate-100 bg-slate-50/50'}`}>
-                 <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => setInputText(result?.original || '')} className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-blue-600">Original</button>
-                      <div className="h-4 w-px bg-slate-300"></div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-blue-600">{level === SimplificationLevel.LEVEL_3 ? 'Ultra-Short' : level === SimplificationLevel.LEVEL_2 ? 'Structured' : 'Simplified'}</span>
-                      {targetLanguage !== 'English' && <><div className="h-4 w-px bg-slate-300"></div><span className="text-xs font-bold uppercase tracking-wider text-purple-600 flex items-center gap-1"><Languages className="w-3 h-3" />{targetLanguage}</span></>}
-                    </div>
-                 </div>
 
-                 {/* Audio Controls Group */}
-                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    <div className="relative">
-                      <select value={voice} onChange={(e) => handleVoiceChange(e.target.value as VoiceName)} className={`text-sm font-medium py-2 pl-3 pr-8 rounded-lg border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${settings.theme === Theme.DARK ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
-                        {VOICES.map(v => <option key={v.name} value={v.name}>{v.label}</option>)}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div>
-                    </div>
+          {/* Action Area */}
+          <div className="p-6 bg-slate-50/50 border-t border-slate-100 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider ml-1">Complexity Level</label>
+                     <div className="flex gap-2">
+                        <LevelButton lvl={SimplificationLevel.LEVEL_1} label="L1" desc="Standard" icon={AlignLeft} />
+                        <LevelButton lvl={SimplificationLevel.LEVEL_2} label="L2" desc="Structured" icon={List} />
+                        <LevelButton lvl={SimplificationLevel.LEVEL_3} label="L3" desc="Short" icon={Zap} />
+                     </div>
+                  </div>
 
-                    <div className="relative">
-                      <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className={`text-sm font-medium py-2 pl-3 pr-8 rounded-lg border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${settings.theme === Theme.DARK ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
-                         {SPEEDS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500"><svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider ml-1">Language</label>
+                     <div className="relative">
+                        <select 
+                           value={targetLanguage} 
+                           onChange={(e) => setTargetLanguage(e.target.value as SupportedLanguage)} 
+                           className="w-full appearance-none bg-white border border-slate-200 text-slate-700 py-3 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary font-bold shadow-sm"
+                           disabled={!!sharedMaterial}
+                         >
+                           {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                        </select>
+                        <Languages className="pointer-events-none absolute inset-y-0 right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                     </div>
+                  </div>
+              </div>
+
+              <button 
+                 onClick={handleSimplify} 
+                 disabled={(!inputText.trim() && !sharedMaterial) || status === AppStatus.SIMPLIFYING}
+                 className={`w-full py-4 rounded-xl font-bold text-white shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 text-lg
+                   ${!inputText.trim() || status === AppStatus.SIMPLIFYING ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-primary hover:bg-blue-600'}`}
+               >
+                 {status === AppStatus.SIMPLIFYING ? <><RefreshCw className="w-5 h-5 animate-spin" /> Simplifying...</> : <><Sparkles className="w-5 h-5" /> Simplify Text</>}
+               </button>
+          </div>
+        </div>
+
+        {/* Output Panel (Shown when active) */}
+        {(status !== AppStatus.IDLE || result) && (
+            <div ref={resultRef} className={`flex-1 flex flex-col rounded-3xl shadow-sm border overflow-hidden min-h-[500px] relative animate-in slide-in-from-right-8 fade-in duration-700 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'}`}>
+            
+            {/* Top Bar */}
+            <div className={`px-6 py-3 border-b flex flex-wrap items-center justify-between gap-4 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 text-slate-400">
+                        <Settings2 className="w-4 h-4" />
                     </div>
-                    
-                    <button onClick={() => setIsFocusMode(true)} className={`p-2.5 rounded-lg transition-all border ${settings.theme === Theme.DARK ? 'border-slate-600 hover:bg-slate-700 text-slate-400' : 'border-slate-200 hover:bg-slate-100 text-slate-500'}`} title="Enter Focus Mode">
+                    {/* Audio Controls */}
+                    <div className={`flex items-center gap-2 p-1 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-slate-50 border-slate-100'}`}>
+                        <button onClick={toggleAudio} disabled={!result} className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${isPlaying ? 'bg-white text-red-500 shadow-sm' : 'text-primary hover:bg-white hover:shadow-sm'} disabled:opacity-50`}>
+                            {status === AppStatus.GENERATING_AUDIO ? <RefreshCw className="w-3 h-3 animate-spin" /> : isPlaying ? <Pause className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 ml-0.5" />}
+                        </button>
+                        <select disabled={!result} value={voice} onChange={(e) => handleVoiceChange(e.target.value as VoiceName)} className={`bg-transparent text-xs font-bold focus:outline-none cursor-pointer hover:text-primary disabled:opacity-50 px-1 ${isDark ? 'text-gray-300' : 'text-slate-600'}`}>
+                            {VOICES.map(v => <option key={v.name} value={v.name}>{v.label}</option>)}
+                        </select>
+                        <div className={`w-px h-3 ${isDark ? 'bg-gray-600' : 'bg-slate-200'}`}></div>
+                        <select disabled={!result} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className={`bg-transparent text-xs font-bold focus:outline-none cursor-pointer hover:text-primary disabled:opacity-50 px-1 ${isDark ? 'text-gray-300' : 'text-slate-600'}`}>
+                            {SPEEDS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setIsFocusMode(true)} disabled={!result} className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-30">
                         <Maximize2 className="w-4 h-4" />
                     </button>
-
-                     {audioBuffer && (
-                       <button onClick={handleDownloadAudio} className={`p-2.5 rounded-lg transition-all border ${settings.theme === Theme.DARK ? 'border-slate-600 hover:bg-slate-700 text-slate-400' : 'border-slate-200 hover:bg-slate-100 text-slate-500'}`} title="Save Audio">
-                         <Download className="w-4 h-4" />
-                       </button>
-                     )}
-
-                    <button onClick={toggleAudio} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap min-w-[120px] justify-center ${isPlaying ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
-                        {status === AppStatus.GENERATING_AUDIO ? <RefreshCw className="w-4 h-4 animate-spin" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Volume2 className="w-4 h-4" />}
-                        {status === AppStatus.GENERATING_AUDIO ? 'Loading...' : isPlaying ? 'Stop' : 'Read Aloud'}
-                    </button>
-                 </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-8 md:p-12 min-h-[50vh]">
-                 {result?.summary && level !== SimplificationLevel.LEVEL_3 && (
-                   <div className="mb-8 p-6 bg-blue-50/50 rounded-2xl border border-blue-100/50">
-                      <h3 className="text-blue-900/60 uppercase text-xs font-bold tracking-widest mb-2">Summary</h3>
-                      <p className="text-blue-900 font-medium text-lg leading-relaxed font-sans">
-                        {result.summary}
-                      </p>
-                   </div>
-                 )}
-
-                 <div style={getContentStyles()} className="whitespace-pre-wrap mb-10">
-                    {renderTextContent()}
-                 </div>
-
-                 {result?.quiz && result.quiz.length > 0 && (
-                   <div className="mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
-                     <QuizSection questions={result.quiz} theme={settings.theme} />
-                   </div>
-                 )}
-              </div>
+                    {audioBuffer && (
+                        <button onClick={handleDownloadAudio} className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors">
+                            <Download className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
-            
-            <div className="flex justify-center pt-8">
-               <button onClick={resetApp} className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors">
-                 <ChevronLeft className="w-4 h-4" /> Back to Input
-               </button>
+
+            {/* Content */}
+            <div className={`flex-1 overflow-y-auto ${getContainerStyles()} transition-colors`}>
+                {status === AppStatus.ERROR ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-10 text-red-500">
+                        <AlertCircle className="w-12 h-12 mb-4" />
+                        <p className="font-bold">{errorMsg}</p>
+                    </div>
+                ) : (
+                    <div className="p-8 md:p-10 space-y-8">
+                        <TextControls settings={settings} onUpdate={(s) => setSettings(p => ({...p, ...s}))} />
+
+                        {result?.summary && level !== SimplificationLevel.LEVEL_3 && (
+                        <div className={`p-6 rounded-2xl border ${isDark ? 'bg-indigo-900/20 border-indigo-500/20' : 'bg-accent/5 border-accent/10'}`}>
+                            <h3 className={`text-xs font-extrabold uppercase tracking-widest mb-2 ${isDark ? 'text-indigo-300' : 'text-accent'}`}>Summary</h3>
+                            <p className={`font-medium text-lg leading-relaxed ${isDark ? 'text-gray-50' : 'text-slate-800'}`}>
+                            {result.summary}
+                            </p>
+                        </div>
+                        )}
+
+                        <div style={getContentStyles()} className="whitespace-pre-wrap min-h-[200px]">
+                        {renderTextContent()}
+                        </div>
+
+                        {result?.quiz && result.quiz.length > 0 && (
+                        <div className={`pt-8 border-t ${isDark ? 'border-gray-700' : 'border-slate-200/50'}`}>
+                            <QuizSection questions={result.quiz} theme={settings.theme} />
+                        </div>
+                        )}
+                    </div>
+                )}
             </div>
-          </div>
+            </div>
         )}
       </main>
     </div>

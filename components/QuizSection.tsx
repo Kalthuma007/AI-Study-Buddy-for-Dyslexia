@@ -12,13 +12,11 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
   const [showConfetti, setShowConfetti] = useState(false);
 
   const handleSelect = (questionIndex: number, optionIndex: number) => {
-    // Prevent changing answer once selected
     if (selectedAnswers[questionIndex] !== undefined) return;
 
     const newAnswers = { ...selectedAnswers, [questionIndex]: optionIndex };
     setSelectedAnswers(newAnswers);
 
-    // Check if all correct
     const allAnswered = questions.length === Object.keys(newAnswers).length;
     if (allAnswered) {
       const allCorrect = questions.every((q, idx) => newAnswers[idx] === q.correctAnswerIndex);
@@ -30,17 +28,17 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
     switch (theme) {
       case Theme.DARK:
         return {
-          container: 'bg-slate-800 border-slate-700',
-          title: 'text-slate-100',
-          card: 'bg-slate-900 border-slate-700',
-          text: 'text-slate-200',
-          optionBase: 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700',
+          container: 'bg-gray-900 border-gray-800',
+          title: 'text-white', // #FFFFFF
+          card: 'bg-gray-800 border-gray-700',
+          text: 'text-gray-50', // #F9FAFB
+          optionBase: 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:border-indigo-300',
         };
       case Theme.CREAM:
         return {
           container: 'bg-[#FDFBF7] border-amber-100',
           title: 'text-amber-900',
-          card: 'bg-white border-amber-100/50 shadow-sm',
+          card: 'bg-white border-amber-100 shadow-sm',
           text: 'text-slate-800',
           optionBase: 'bg-[#FDFBF7] border-amber-200 text-slate-700 hover:border-amber-400',
         };
@@ -54,11 +52,11 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
         };
       default:
         return {
-          container: 'bg-slate-50 border-slate-200',
+          container: 'bg-slate-50 border-slate-100',
           title: 'text-slate-800',
           card: 'bg-white border-slate-200 shadow-sm',
           text: 'text-slate-800',
-          optionBase: 'bg-white border-slate-200 text-slate-600 hover:border-blue-400 hover:bg-slate-50',
+          optionBase: 'bg-white border-slate-200 text-slate-600 hover:border-primary hover:bg-blue-50',
         };
     }
   };
@@ -67,13 +65,13 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
 
   return (
     <div className={`rounded-3xl p-6 md:p-8 border ${styles.container} transition-colors duration-300`}>
-      <div className="flex items-center gap-3 mb-6">
-        <div className={`p-2 rounded-xl ${theme === Theme.DARK ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'}`}>
-          {showConfetti ? <Trophy className="w-6 h-6 animate-bounce" /> : <HelpCircle className="w-6 h-6" />}
+      <div className="flex items-center gap-3 mb-8">
+        <div className={`p-2.5 rounded-xl ${theme === Theme.DARK ? 'bg-indigo-600 text-white' : 'bg-primary text-white'} shadow-lg shadow-blue-200/50`}>
+          {showConfetti ? <Trophy className="w-5 h-5 animate-bounce" /> : <HelpCircle className="w-5 h-5" />}
         </div>
         <div>
-          <h3 className={`text-xl font-bold ${styles.title}`}>Comprehension Check</h3>
-          <p className={`text-sm opacity-70 ${styles.text}`}>Test your understanding of the text.</p>
+          <h3 className={`text-lg font-bold ${styles.title}`}>Comprehension Check</h3>
+          <p className={`text-xs font-medium opacity-60 ${styles.text}`}>Test your understanding</p>
         </div>
       </div>
 
@@ -84,29 +82,25 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
           const isCorrect = userSelection === q.correctAnswerIndex;
 
           return (
-            <div key={qIndex} className={`p-5 rounded-2xl border ${styles.card}`}>
-              <p className={`font-semibold mb-4 text-lg ${styles.text}`}>
-                <span className="opacity-50 mr-2">{qIndex + 1}.</span>
+            <div key={qIndex} className={`p-6 rounded-2xl border ${styles.card}`}>
+              <p className={`font-bold mb-4 text-base ${styles.text}`}>
+                <span className={`mr-2 ${theme === Theme.DARK ? 'text-indigo-400' : 'text-primary'}`}>Q{qIndex + 1}.</span>
                 {q.question}
               </p>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 {q.options.map((option, optIndex) => {
-                  let optionClass = `w-full text-left p-4 rounded-xl border-2 transition-all relative `;
+                  let optionClass = `w-full text-left px-4 py-3 rounded-xl border-2 transition-all relative font-medium text-sm `;
                   
                   if (isAnswered) {
                     if (optIndex === q.correctAnswerIndex) {
-                      // Correct Answer Style
-                      optionClass += "bg-green-50 border-green-500 text-green-800";
+                      optionClass += "bg-green-500/10 border-green-500 text-green-600";
                     } else if (optIndex === userSelection) {
-                      // Wrong Selection Style
-                      optionClass += "bg-red-50 border-red-400 text-red-800";
+                      optionClass += "bg-red-500/10 border-red-500 text-red-600";
                     } else {
-                      // Other unselected options
                       optionClass += "opacity-50 border-transparent bg-transparent";
                     }
                   } else {
-                    // Default State
                     optionClass += styles.optionBase;
                   }
 
@@ -118,24 +112,18 @@ export const QuizSection: React.FC<QuizSectionProps> = ({ questions, theme }) =>
                       className={optionClass}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">{option}</span>
+                        <span>{option}</span>
                         {isAnswered && optIndex === q.correctAnswerIndex && (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
                         )}
                         {isAnswered && optIndex === userSelection && optIndex !== q.correctAnswerIndex && (
-                          <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                          <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                         )}
                       </div>
                     </button>
                   );
                 })}
               </div>
-              
-              {isAnswered && (
-                <div className={`mt-3 text-sm font-bold flex items-center gap-2 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>
-                  {isCorrect ? 'Correct!' : 'Incorrect. The correct answer is highlighted.'}
-                </div>
-              )}
             </div>
           );
         })}

@@ -7,18 +7,40 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Open+Sans:ital,wght@0,400;0,600;1,400&family=Comic+Neue:wght@400;700&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Open+Sans:ital,wght@0,400;0,600;1,400&family=Comic+Neue:wght@400;700&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
-              dyslexic: ['Comic Neue', 'cursive'], // A common alternative when OpenDyslexic isn't available via Google Fonts
+              dyslexic: ['Comic Neue', 'cursive'],
               readable: ['Open Sans', 'sans-serif'],
               lexend: ['Lexend', 'sans-serif'],
             },
             colors: {
+              primary: {
+                DEFAULT: '#3B82F6', // User requested #3B82F6
+                50: '#eff6ff',
+                100: '#dbeafe',
+                500: '#3B82F6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+              },
+              accent: {
+                DEFAULT: '#7C3AED', // User requested #7C3AED
+                50: '#f5f3ff',
+                100: '#ede9fe',
+                500: '#8b5cf6',
+                600: '#7C3AED',
+                700: '#6d28d9',
+              },
+              background: '#F9FAFB', // User requested #F9FAFB
+              surface: '#FFFFFF',
+              text: {
+                main: '#111827', // User requested #111827
+                muted: '#6B7280',
+              },
               'cream': '#FDFBF7',
               'soft-yellow': '#FEF9E7',
               'soft-blue': '#EDF2F7',
@@ -30,7 +52,8 @@
     </script>
     <style>
       body {
-        background-color: #F3F4F6;
+        background-color: #F9FAFB;
+        color: #111827;
       }
       /* Custom scrollbar for better visibility */
       ::-webkit-scrollbar {
